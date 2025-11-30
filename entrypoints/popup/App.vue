@@ -1,30 +1,133 @@
 <script lang="ts" setup>
-import HelloWorld from '@/components/HelloWorld.vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+
+type AudioTab = {
+  id: number 
+  tabId: number
+  title: string
+  url: string
+  isAudible: boolean
+  hasContentAudio: boolean
+  is_muted: boolean
+  paused: boolean
+  volume: number
+}
+
+const audioTabs = ref<AudioTab[]>([])
+let port: Browser.runtime.Port | null = null
+
+function handleMessage(msg: any) {
+  if (msg.type === 'AUDIO_TABS_UPDATE') {
+    audioTabs.value = msg.tabs.map((tab: any) => ({
+      ...tab,
+      id: tab.tabId, // Map tabId to id for Vue key
+      paused: tab.paused ?? false,
+      volume: tab.volume ?? 0,
+      is_muted: tab.is_muted ?? false,
+    }))
+  }
+}
+
+onMounted(() => {
+  // Connect to background when popup opens
+  port = browser.runtime.connect({ name: 'popup' })
+  port.onMessage.addListener(handleMessage)
+  port.postMessage({ type: 'GET_AUDIO_TABS' })
+})
+
+onBeforeUnmount(() => {
+  if (port) {
+    port.disconnect()
+  }
+})
 </script>
 
 <template>
-  <div>
-    <a href="https://wxt.dev" target="_blank">
-      <img src="/wxt.svg" class="logo" alt="WXT logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="@/assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+  <div class="popup">
+    <h1>Active Audio Tabs version 2</h1>
+    <ul v-if="audioTabs.length > 0">
+      <li v-for="tab in audioTabs" :key="tab.id" class="tab">
+        <span class="title">{{ tab.title || tab.url }}</span>
+        
+        <!-- Check muted first, then paused, then playing -->
+        <!-- Priority: Muted > Paused > Playing -->
+        <span v-if="tab.is_muted" class="badge muted">
+          Muted - {{ (tab.volume * 100).toFixed(0) }}%
+        </span>
+        <span v-else-if="tab.paused" class="badge paused">
+          Paused - {{ (tab.volume * 100).toFixed(0) }}%
+        </span>
+        <span v-else-if="tab.isAudible || tab.hasContentAudio" class="badge playing">
+          Playing - {{ (tab.volume * 100).toFixed(0) }}%
+        </span>
+        <span v-else class="badge inactive">
+          Silent
+        </span>
+      </li>
+    </ul>
+    <p v-else>No audio detected</p>
   </div>
-  <HelloWorld msg="WXT + Vue" />
 </template>
 
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.popup {
+  min-width: 320px; 
+  padding: 12px;
+  font-family: sans-serif;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #54bc4ae0);
+
+h1 {
+  font-size: 16px;
+  margin-bottom: 10px;
 }
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tab {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px; 
+  padding: 8px;
+  background: #000000;
+  border-radius: 6px;
+}
+
+.title {
+  flex: 1;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: rgb(255, 255, 255);
+  white-space: nowrap; 
+}
+
+/* Different colors for different states */
+.badge.playing {
+  background: #4caf50;
+}
+
+.badge.muted {
+  background: #ff9800;
+}
+
+.badge.paused {
+  background: #2196f3;
+}
+
+.badge.inactive {
+  background: #888;
 }
 </style>
