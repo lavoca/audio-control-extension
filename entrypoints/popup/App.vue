@@ -1,3 +1,4 @@
+
 <script lang="ts" setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
@@ -51,8 +52,8 @@ onBeforeUnmount(() => {
         
         <!-- Check muted first, then paused, then playing -->
         <!-- Priority: Muted > Paused > Playing -->
-        <span v-if="tab.is_muted" class="badge muted">
-          Muted - {{ (tab.volume * 100).toFixed(0) }}%
+        <span v-if="tab.is_muted && !tab.paused" class="badge muted">
+          Muted
         </span>
         <span v-else-if="tab.paused" class="badge paused">
           Paused - {{ (tab.volume * 100).toFixed(0) }}%
