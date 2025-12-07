@@ -37,10 +37,7 @@ export default defineBackground(() => {
   
   cleanupStaleTabs();
 
-  async function getTabstates() {
-    return await tabStatesStorage.getValue();
-  }
-  
+
   async function updateTabstate(tabId: number, updates: Partial<TabAudioState>) {
     const tabStates = await getTabstates();
     tabStates[tabId] = {
@@ -50,6 +47,13 @@ export default defineBackground(() => {
     };
     await tabStatesStorage.setValue(tabStates);
   }
+
+
+  
+  async function getTabstates() {
+    return await tabStatesStorage.getValue();
+  }
+  
   
   async function deleteTabState(tabId: number) {
     const tabStates = await getTabstates();

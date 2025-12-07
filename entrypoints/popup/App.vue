@@ -16,6 +16,7 @@ type AudioTab = {
 
 const audioTabs = ref<AudioTab[]>([])
 let port: Browser.runtime.Port | null = null
+const startVolumes = new Map<number, number>() // map to hold all the starting slider volumes for every tab
 
 function handleMessage(msg: any) {
   if (msg.type === 'AUDIO_TABS_UPDATE') {
@@ -28,6 +29,30 @@ function handleMessage(msg: any) {
     }))
   }
 }
+ // captures the value when the slider first gets pressed this value will serve as a returning point when we unmute from volume = 0
+function captureStartVolume(tabID:number, initialVolume: number) {
+  startVolumes.set(tabID, initialVolume); // push the volume and the tabID associated with it as the key
+
+}
+
+async function changeVolume(tabID: number, newVolume: number) {;
+  await browser.tabs.sendMessage(tabID, {
+    type: 'UI_VOLUME_CHANGE',
+    volume: newVolume,
+  })
+}
+
+async function setMute(tabID: number, muted: boolean) {
+  const startVolume = startVolumes.get(tabID); // get the initial slider volume for this tabID
+  console.log("lastvolume:", startVolume)
+  await browser.tabs.sendMessage(tabID, {
+    type: 'UI_MUTE_SET',
+    is_muted: muted,
+    initialVolume: startVolume, // send the initial volume to content.ts along with the mute state
+  })
+}
+
+
 
 onMounted(() => {
   // Connect to background when popup opens
@@ -50,6 +75,26 @@ onBeforeUnmount(() => {
       <li v-for="tab in audioTabs" :key="tab.id" class="tab">
         <span class="title">{{ tab.title || tab.url }}</span>
         
+        <!-- Volume Controls -->
+        
+          <!-- Volume Slider -->
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          :value="tab.volume"
+          @mousedown="captureStartVolume(tab.id, tab.volume)" 
+          @input="changeVolume(tab.id, ($event.target as HTMLInputElement).valueAsNumber)"
+          class="w-40 h-2 bg-gray-500 rounded-lg appearance-none cursor-pointer"
+        />
+        <button
+          @click="setMute(tab.id, !tab.is_muted)"
+          class="px-4 py-1 text-sm font-semibold text-white rounded-md transition-colors duration-200"
+          :class="tab.is_muted ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
+        >
+          {{ tab.is_muted ? 'Unmute' : 'Mute' }}
+        </button>
         <!-- Check muted first, then paused, then playing -->
         <!-- Priority: Muted > Paused > Playing -->
         <span v-if="tab.is_muted && !tab.paused" class="badge muted">

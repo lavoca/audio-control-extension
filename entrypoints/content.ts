@@ -9,7 +9,9 @@ export default defineContentScript({
 
       // Function to notify if a tab is playing audio or not
     function updateAudioStatus(state: string, data: {muted?: Boolean, volume?: number} = {}) {
-        
+
+      // CONTENT SCRIPT: Send audio state TO background
+      // Browser automatically attaches this tab's ID for background to know who sent it  
       browser.runtime.sendMessage({
         type: state, 
         ...data, // "...data" means we extract the values inside data without needing to do things like data.volume: / data.muted:
@@ -19,6 +21,27 @@ export default defineContentScript({
       })
       
     }
+
+    // CONTENT SCRIPT: Receive volume control commands FROM popup/background
+    // Browser already routed this message to THIS specific tab only
+    browser.runtime.onMessage.addListener((message) =>{
+      // we are already in the correct tab so we just loop through the elemets inside it
+      if(message.type === 'UI_VOLUME_CHANGE') {
+        audioElements.forEach(element => {
+
+          element.volume = message.volume;
+
+        }) 
+      } else if(message.type === 'UI_MUTE_SET') {
+        audioElements.forEach(element => {
+          if(message.is_muted === false && element.volume === 0) { // if the mute value we get from popup is false which means we want to unmute and the volume is 0 from popup
+            element.volume = message.initialVolume; // initial volume we want to go back to after we unmute from volume being 0
+          }else {
+            element.muted = message.is_muted;
+          } 
+        })
+      } // this volume and mute change will then be detected by addEventListener('volumechange') and fires updateAudioStatus and everything proceeds as normal from there
+    })
 
     // function to determine if a tab has any element that is playing audio
     // a tab can have many media elements that can play audio if one of them is playing then the whole tab is playing 
