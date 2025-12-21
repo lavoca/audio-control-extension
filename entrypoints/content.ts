@@ -1,3 +1,11 @@
+/**
+ * CONTENT SCRIPT (runs once per tab)
+ * - Detects audio/video elements in the page DOM
+ * - Listens for play/pause/volume events on media elements
+ * - Sends audio state updates to background script
+ * - Receives volume/mute control commands from popup and applies them to elements
+ */
+
 
 export default defineContentScript({
   matches: ['<all_urls>'],

@@ -1,3 +1,13 @@
+
+/**
+ * BACKGROUND SCRIPT (runs once globally)
+ * - Receives audio state updates from all content scripts
+ * - Stores tab audio states in persistent storage
+ * - Coordinates between content scripts and popup
+ * - Sends aggregated audio tab data to popup via port connection
+ */
+
+
 import { browser } from 'wxt/browser';
 import { storage } from 'wxt/utils/storage';
   

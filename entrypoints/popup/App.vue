@@ -1,6 +1,17 @@
 
 <script lang="ts" setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+
+/**
+ * POPUP UI (opens when user clicks extension icon)
+ * - Connects to background script to receive audio tab states
+ * - Displays list of tabs with active audio
+ * - Provides volume sliders and mute buttons for user control
+ * - Sends volume/mute commands to content scripts via background
+ */
+
+
+
+import { ref, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 
 type AudioTab = {
   id: number 
