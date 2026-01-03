@@ -25,10 +25,13 @@ type AudioTab = {
   volume: number
 }
 
+const tauriVolume = ref() // this is supposed to get data from background and use v-model to update in template the slider value so it can trigger the normal flow of data after
+
 const audioTabs = ref<AudioTab[]>([])
 let port: Browser.runtime.Port | null = null
 const startVolumes = new Map<number, number>() // map to hold all the starting slider volumes for every tab
 
+// handle messages we get from background
 function handleMessage(msg: any) {
   if (msg.type === 'AUDIO_TABS_UPDATE') {
     audioTabs.value = msg.tabs.map((tab: any) => ({
@@ -68,13 +71,13 @@ async function setMute(tabID: number, muted: boolean) {
 onMounted(() => {
   // Connect to background when popup opens
   port = browser.runtime.connect({ name: 'popup' })
-  port.onMessage.addListener(handleMessage)
   port.postMessage({ type: 'GET_AUDIO_TABS' })
+  port.onMessage.addListener(handleMessage)
 })
 
-onBeforeUnmount(() => {
+onBeforeUnmount(() => { // before the extension is about to close
   if (port) {
-    port.disconnect()
+    port.disconnect(); // if we have a port then close it
   }
 })
 </script>
