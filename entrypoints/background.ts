@@ -13,11 +13,11 @@ import { storage } from 'wxt/utils/storage';
   
 interface TabAudioState {
   tabId: number;
-  url: string;
-  title: string;
+  tabUrl: string;
+  tabTitle: string;
   isAudible: boolean;
   hasContentAudio: boolean;
-  is_muted: boolean;
+  isMuted: boolean;
   paused: boolean;
   volume: number;
   lastUpdate: number;
@@ -34,8 +34,9 @@ let popupPorts: Browser.runtime.Port[] = [];
 let socket : WebSocket | null = null;
 let heartbeatInterval: any;
 let status: String = 'DISCONNECTED';
+let tauriTabId: number;
 let tauriVolume: number;
-let tauriMuted: boolean;
+let taurisMuted: boolean;
 
 export default defineBackground(() => {
   
@@ -81,31 +82,33 @@ export default defineBackground(() => {
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => { // this listens to updates from tabs
     if (changeInfo.audible !== undefined) { // check if tab has audio
       const tabstates = await getTabstates(); 
-      const currentState = tabstates[tabId]; // get the tab by id from storage, the tabId is from the listener
+      const currentState = tabstates[tabId]; // get the tab by tabId from storage, the tabId is from the listener
       
       // Only update isAudible, preserve content script state
       if (currentState) { // if we already have info about this tab then update it in storage
         await updateTabstate(tabId, { 
           isAudible: changeInfo.audible || false,
-          title: tab.title || currentState.title,
-          url: tab.url || currentState.url,
+          tabTitle: tab.title || currentState.tabTitle,
+          tabUrl: tab.url || currentState.tabUrl,
         });
       } else {
         // New tab, create initial state
         await updateTabstate(tabId, {
           tabId,
-          url: tab.url || '',
-          title: tab.title || '',
+          tabUrl: tab.url || '',
+          tabTitle: tab.title || '',
           isAudible: changeInfo.audible || false,
           hasContentAudio: false,
-          is_muted: false,
+          isMuted: false,
           paused: false,
           volume: 0,
           lastUpdate: Date.now()
         });
       }
       
-      await sendTabsToPopupAndTauri();
+      await sendTabsToPopup();
+      console.log("senTabsToPopup() called from onUpdated.addListener");
+      await sendTabsToTauri();
     }
   });
 
@@ -131,21 +134,25 @@ export default defineBackground(() => {
 
       case 'VOLUME_CHANGED':
         handleContentAudioChanged(tabId, message);
+        console.log("Background Script: Received state update from content script:", message);
         break;
     }
   });
 
   browser.tabs.onRemoved.addListener(async (tabId) => {
     await deleteTabState(tabId);
-    await sendTabsToPopupAndTauri();
+    await sendTabsToPopup();
+    console.log("senTabsToPopup() called from onRemoved.addListener");
+    await sendTabsToTauri();
   });
 
-  // responsible for sending both to tauri app and to popup 
-  async function sendTabsToPopupAndTauri() { 
+  // responsible for sending audio tabs to popup 
+  async function sendTabsToPopup() { 
     const tabstates = await getTabstates();
     const audioTabs = Object.values(tabstates).filter(
       tab => tab.isAudible || tab.hasContentAudio || tab.paused
     );
+    console.log("Background Script: Sending updated states to popup:", audioTabs);
     
     // sends to popup
     popupPorts.forEach(port => { // send to popup
@@ -154,6 +161,14 @@ export default defineBackground(() => {
         tabs: audioTabs
       });
     });
+  }
+
+  // responsible for sending audio tabs to tauri 
+  async function sendTabsToTauri() {
+    const tabstates = await getTabstates();
+    const audioTabs = Object.values(tabstates).filter(
+      tab => tab.isAudible || tab.hasContentAudio || tab.paused
+    );
 
     // sends to tauri app via websocket server
     if(socket?.readyState === WebSocket.OPEN) { // if we have a connection to the websocket
@@ -177,7 +192,9 @@ export default defineBackground(() => {
       
       port.onMessage.addListener((message) => { 
         if (message.type === 'GET_AUDIO_TABS') { // this is sent from app.vue when the popup is first mounted
-          connect(); // connect to the server. inside this function we handle the sending of tabs to both tauri and popup.
+          sendTabsToPopup(); // send to popup app.vue
+          console.log("senTabsToPopup() called from onMessage.addListener");
+          connect(); // connect to the server. inside this function we handle the sending of tabs to tauri
         }
       });
     }
@@ -193,7 +210,7 @@ export default defineBackground(() => {
       title: '',
       isAudible: false,
       hasContentAudio: false,
-      is_muted: false,
+      isMuted: false,
       paused: false,
       volume: 0,
       lastUpdate: Date.now(),
@@ -203,13 +220,15 @@ export default defineBackground(() => {
       ...baseState,
       hasContentAudio: true,
       paused: false,
-      url: message.url || baseState.url,
-      title: message.title || baseState.title,
-      is_muted: message.muted ?? baseState.is_muted,
+      tabUrl: message.url || baseState.tabUrl,
+      tabTitle: message.title || baseState.tabTitle,
+      isMuted: message.muted ?? baseState.isMuted,
       volume: message.volume ?? baseState.volume,
     });
     
-    await sendTabsToPopupAndTauri();
+    await sendTabsToPopup();
+    console.log("senTabsToPopup() called from handleContentAudioDetected");
+    await sendTabsToTauri();
   }
 
   async function handleContentAudioStopped(tabId: number, message: any) {
@@ -221,11 +240,13 @@ export default defineBackground(() => {
         hasContentAudio: false,
         paused: false,
         // Keep muted/volume state from message
-        is_muted: message.muted ?? existingState.is_muted,
+        isMuted: message.muted ?? existingState.isMuted,
         volume: message.volume ?? existingState.volume,
       });
       
-      await sendTabsToPopupAndTauri();
+      await sendTabsToPopup();
+      console.log("senTabsToPopup() called from handleContentAudioStopped");
+      await sendTabsToTauri();
     }
   }
 
@@ -238,11 +259,13 @@ export default defineBackground(() => {
         hasContentAudio: true,
         paused: true,
         // Update muted/volume from the pause event
-        is_muted: message.muted ?? existingState.is_muted,
-        volume: message.volume ?? existingState.volume,
+        isMuted: message.muted ?? existingState.isMuted,
+        volume: message.volume ?? existingState.volume, 
       });
       
-      await sendTabsToPopupAndTauri();
+      await sendTabsToPopup();
+      console.log("senTabsToPopup() called from handleContentAudioPaused");
+      await sendTabsToTauri();
     }
   }
 
@@ -252,11 +275,13 @@ export default defineBackground(() => {
     
     if (existingState) {
       await updateTabstate(tabId, {
-        is_muted: message.muted ?? existingState.is_muted,
+        isMuted: message.muted ?? existingState.isMuted,
         volume: message.volume ?? existingState.volume,
       });
       
-      await sendTabsToPopupAndTauri();
+      await sendTabsToPopup();
+      console.log("senTabsToPopup() called from handleContentAudioChanged");
+      await sendTabsToTauri();
     }
   }
 
@@ -288,15 +313,18 @@ export default defineBackground(() => {
     // we need to send a ping message to the server every 20 seconds to reset the 30 seconds timer everytime so the connection can persist 
     socket.onopen = async () => {
       updateStatus('CONNECTED');
+      await sendTabsToTauri(); // send tabs to tauri when first connected
       reconnectAttempts = 0; // reset on new connection
       clearInterval(heartbeatInterval); // clears the previous interval
       heartbeatInterval = setInterval(() => {
         if(socket?.readyState === WebSocket.OPEN) { // if we have a connection to the websocket
-          socket.send(JSON.stringify({type: 'ping'})); // send a ping message 
+          socket.send(JSON.stringify({
+            type: 'PING', 
+            payload: 'ping',
+          })); // send a ping message 
         }
       }, 20000); // after 20 seconds rerun this interval to send ping again 
 
-      await sendTabsToPopupAndTauri(); // send tabs to tauri and popup when first connected
     }
     
     socket.onclose = (event) => {
@@ -305,7 +333,7 @@ export default defineBackground(() => {
         updateStatus('DISCONNECTED');
         reconnectAttempts = 0; // reset on clean exit
         console.log('Clean closure from Tauri.');
-      }else {
+      }else { // reconnect on any other exit reason
         updateStatus('RECONNECTING');
         reconnectAttempts++; // increments every time onclose is fired for not clean disconnect
         const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000); // 1s -> 2s -> 4s -> ... capped at 30s 
@@ -322,16 +350,28 @@ export default defineBackground(() => {
     // we get volume values from tauri slider or a mute value and send it to popup and there we control the slider in app.vue with the slider from tauri app
     socket.onmessage = (event) => {
       // parse the data to json
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data); // the data from tauri will be an object of either setVolume or setMute with a tabId and volume float or mute boolean
       // handle data coming from rust
-      tauriVolume = data.volume;
-      tauriMuted = data.muted;
-      browser.runtime.sendMessage({type: 'TAURI_VOLUME_CHANGED', data: {tauriVolume, tauriMuted}}).catch(() => {}); // Quietly ignore if popup is closed
+      if (data.setVolume) {
+        tauriTabId = data.setVolume.tabId;
+        tauriVolume = data.setVolume.volume;
+        browser.runtime.sendMessage({ // send to popup
+          type: 'TAURI_VOLUME_CHANGED', 
+          data: {tauriTabId, tauriVolume}
+        }).catch(() => {}); // Quietly ignore if popup is closed
+      }else if (data.setMute) {
+        tauriTabId = data.setMute.tabId;
+        taurisMuted = data.setMute.mute;
+        browser.runtime.sendMessage({
+          type: 'TAURI_MUTE_CHANGED',
+          data: {tauriTabId, taurisMuted},
+        }).catch(() => {});
+      }
+      
+      
     }
   
   }
-  
-
 });
 
 

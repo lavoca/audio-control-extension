@@ -20,13 +20,12 @@ type AudioTab = {
   url: string
   isAudible: boolean
   hasContentAudio: boolean
-  is_muted: boolean
+  isMuted: boolean
   paused: boolean
   volume: number
 }
 
-const tauriVolume = ref() // this is supposed to get data from background and use v-model to update in template the slider value so it can trigger the normal flow of data after
-
+let serverStatus :String = 'DISCONNECTED'; 
 const audioTabs = ref<AudioTab[]>([])
 let port: Browser.runtime.Port | null = null
 const startVolumes = new Map<number, number>() // map to hold all the starting slider volumes for every tab
@@ -39,8 +38,20 @@ function handleMessage(msg: any) {
       id: tab.tabId, // Map tabId to id for Vue key
       paused: tab.paused ?? false,
       volume: tab.volume ?? 0,
-      is_muted: tab.is_muted ?? false,
+      isMuted: tab.isMuted ?? false,
     }))
+
+  }else if(msg.type === 'TAURI_VOLUME_CHANGED') {
+    console.log("muting from changing volume from tauri");
+    changeVolume(msg.data.tauriTabId, msg.data.tauriVolume); // gets the volume and tabid from tauri via websocket and calls the change volume function with them jsut like if the slider in template called it
+  
+  }else if(msg.type === 'TAURI_MUTE_CHANGED') {
+    console.log("muting from tauri");
+    setMute(msg.data.tauriTabId, msg.data.taurisMuted);
+
+  }else if(msg.type === 'SERVER_STATUS') {
+    serverStatus = msg.status;
+    console.log("server status:", serverStatus);
   }
 }
  // captures the value when the slider first gets pressed this value will serve as a returning point when we unmute from volume = 0
@@ -61,7 +72,7 @@ async function setMute(tabID: number, muted: boolean) {
   console.log("lastvolume:", startVolume)
   await browser.tabs.sendMessage(tabID, {
     type: 'UI_MUTE_SET',
-    is_muted: muted,
+    isMuted: muted,
     initialVolume: startVolume, // send the initial volume to content.ts along with the mute state
   })
 }
@@ -85,6 +96,7 @@ onBeforeUnmount(() => { // before the extension is about to close
 <template>
   <div class="popup">
     <h1>Active Audio Tabs version 2</h1>
+    <h2>connection to tauri server: {{ serverStatus }}</h2>
     <ul v-if="audioTabs.length > 0">
       <li v-for="tab in audioTabs" :key="tab.id" class="tab">
         <span class="title">{{ tab.title || tab.url }}</span>
@@ -103,15 +115,15 @@ onBeforeUnmount(() => { // before the extension is about to close
           class="w-40 h-2 bg-gray-500 rounded-lg appearance-none cursor-pointer"
         />
         <button
-          @click="setMute(tab.id, !tab.is_muted)"
+          @click="setMute(tab.id, !tab.isMuted)"
           class="px-4 py-1 text-sm font-semibold text-white rounded-md transition-colors duration-200"
-          :class="tab.is_muted ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
+          :class="tab.isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
         >
-          {{ tab.is_muted ? 'Unmute' : 'Mute' }}
+          {{ tab.isMuted ? 'Unmute' : 'Mute' }}
         </button>
         <!-- Check muted first, then paused, then playing -->
         <!-- Priority: Muted > Paused > Playing -->
-        <span v-if="tab.is_muted && !tab.paused" class="badge muted">
+        <span v-if="tab.isMuted && !tab.paused" class="badge muted">
           Muted
         </span>
         <span v-else-if="tab.paused" class="badge paused">

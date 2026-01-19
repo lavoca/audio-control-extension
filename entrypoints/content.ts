@@ -15,18 +15,40 @@ export default defineContentScript({
     const audioElements = new Set<HTMLMediaElement>;
     let isTabPlayingAudio = false;
 
-      // Function to notify if a tab is playing audio or not
-    function updateAudioStatus(state: string, data: {muted?: Boolean, volume?: number} = {}) {
+    // holds the last data 'updateAudioStatus()' sent to background so that before sending new data we compare it with the last one sent 
+    // and if its different we send the new one if not we send nothing. only send if data is new/different
+    // this mainly prevents 'setupPeriodicCheck()' function that gets called every 2 seconds from sending the same data every 2 seconds unnecessarily   
+    let lastState = {
+      type: '',
+      volume: -1,
+      muted: false,
+    };
 
-      // CONTENT SCRIPT: Send audio state TO background
-      // Browser automatically attaches this tab's ID for background to know who sent it  
-      browser.runtime.sendMessage({
-        type: state, 
-        ...data, // "...data" means we extract the values inside data without needing to do things like data.volume: / data.muted:
-        url: window.location.href,
-        title: document.title,
-        timestamp: Date.now()
-      })
+      // Function to notify if a tab is playing audio or not
+    function updateAudioStatus(state: string, data: {muted?: boolean, volume?: number} = {}) {
+      // newState will represent new data about audio elements  
+      const newState = {
+        type: state,
+        volume: data.volume ?? lastState.volume, // Use new value or fall back to last known
+        muted: data.muted ?? lastState.muted,
+      }
+
+      if (
+        newState.type !== lastState.type || newState.volume !== lastState.volume || newState.muted !== lastState.muted
+      ) {
+
+        lastState = newState; // update the old data with the new one that w're about to send 
+
+        // CONTENT SCRIPT: Send audio state TO background
+        // Browser automatically attaches this tab's ID for background to know who sent it  
+        browser.runtime.sendMessage({
+          type: state, 
+          ...data, // "...data" means we extract the values inside data without needing to do things like data.volume: / data.muted:
+          url: window.location.href,
+          title: document.title,
+          timestamp: Date.now()
+        })
+      }
       
     }
 
@@ -42,11 +64,12 @@ export default defineContentScript({
         }) 
       } else if(message.type === 'UI_MUTE_SET') {
         audioElements.forEach(element => {
-          if(message.is_muted === false && element.volume === 0) { // if the mute value we get from popup is false which means we want to unmute and the volume is 0 from popup
+
+          element.muted = message.isMuted; // change the mute state
+
+          if(message.isMuted === false && element.volume === 0) { // if the mute value we get from popup is false which means we want to unmute and the volume is 0 from popup
             element.volume = message.initialVolume; // initial volume we want to go back to after we unmute from volume being 0
-          }else {
-            element.muted = message.is_muted;
-          } 
+          }
         })
       } // this volume and mute change will then be detected by addEventListener('volumechange') and fires updateAudioStatus and everything proceeds as normal from there
     })
@@ -114,6 +137,7 @@ export default defineContentScript({
         const volume = element.volume;
         const muted = element.muted || element.volume === 0;
         updateAudioStatus("VOLUME_CHANGED", {muted, volume});
+        console.log("Content Script: Firing state update to background script! from volumechange listener");
         
       })
 
@@ -207,7 +231,7 @@ export default defineContentScript({
         scanForMediaElements();
         // Always check current playing state for shorts/tiktok
         if (isTabPlayingAudio === true) {
-          checkAnyAudioPlaying();
+          checkAnyAudioPlaying(); // this gets called avery two seconds
         }
       }, 2000) // Check every 2 seconds
     }
