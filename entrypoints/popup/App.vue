@@ -40,20 +40,19 @@ function handleMessage(msg: any) {
       volume: tab.volume ?? 0,
       isMuted: tab.isMuted ?? false,
     }))
-
-  }else if(msg.type === 'TAURI_VOLUME_CHANGED') {
-    console.log("muting from changing volume from tauri");
-    changeVolume(msg.data.tauriTabId, msg.data.tauriVolume); // gets the volume and tabid from tauri via websocket and calls the change volume function with them jsut like if the slider in template called it
-  
-  }else if(msg.type === 'TAURI_MUTE_CHANGED') {
-    console.log("muting from tauri");
-    setMute(msg.data.tauriTabId, msg.data.taurisMuted);
-
-  }else if(msg.type === 'SERVER_STATUS') {
-    serverStatus = msg.status;
-    console.log("server status:", serverStatus);
   }
+  
 }
+
+browser.runtime.onMessage.addListener((message) => {
+  if(message.type === 'SERVER_STATUS') {
+    serverStatus = message.status;
+  }
+}) 
+
+
+
+
  // captures the value when the slider first gets pressed this value will serve as a returning point when we unmute from volume = 0
 function captureStartVolume(tabID:number, initialVolume: number) {
   startVolumes.set(tabID, initialVolume); // push the volume and the tabID associated with it as the key

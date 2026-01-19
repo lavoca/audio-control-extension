@@ -53,16 +53,17 @@ export default defineContentScript({
     }
 
     // CONTENT SCRIPT: Receive volume control commands FROM popup/background
-    // Browser already routed this message to THIS specific tab only
+    // if the message was sent via browser.tabs.sendMessage then Browser already routed this message to the specific tab we provided sendMessage 
+    // but if the message was sent via browser.runtime.sendMessage then wa have data that we can access all over the extension
     browser.runtime.onMessage.addListener((message) =>{
-      // we are already in the correct tab so we just loop through the elemets inside it
+      // these are popup ui messages so we are already in the correct tab so we just loop through the elemets inside it
       if(message.type === 'UI_VOLUME_CHANGE') {
         audioElements.forEach(element => {
 
           element.volume = message.volume;
 
         }) 
-      } else if(message.type === 'UI_MUTE_SET') {
+      }else if(message.type === 'UI_MUTE_SET') {
         audioElements.forEach(element => {
 
           element.muted = message.isMuted; // change the mute state
@@ -71,8 +72,18 @@ export default defineContentScript({
             element.volume = message.initialVolume; // initial volume we want to go back to after we unmute from volume being 0
           }
         })
-      } // this volume and mute change will then be detected by addEventListener('volumechange') and fires updateAudioStatus and everything proceeds as normal from there
-    })
+      }else if( message.type === 'TAURI_VOLUME_CHANGED') {
+        audioElements.forEach(element => {
+
+          element.volume = message.volume;
+        }) 
+      }else if(message.type === 'TAURI_MUTE_CHANGED') {
+        audioElements.forEach(element => {
+
+          element.muted = message.isMuted; // change the mute state
+        })
+      }
+    })// this volume and mute change will then be detected by addEventListener('volumechange') and fires updateAudioStatus and everything proceeds as normal from there
 
     // function to determine if a tab has any element that is playing audio
     // a tab can have many media elements that can play audio if one of them is playing then the whole tab is playing 

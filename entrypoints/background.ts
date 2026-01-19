@@ -36,7 +36,7 @@ let heartbeatInterval: any;
 let status: String = 'DISCONNECTED';
 let tauriTabId: number;
 let tauriVolume: number;
-let taurisMuted: boolean;
+let tauriIsMuted: boolean;
 
 export default defineBackground(() => {
   
@@ -169,6 +169,7 @@ export default defineBackground(() => {
     const audioTabs = Object.values(tabstates).filter(
       tab => tab.isAudible || tab.hasContentAudio || tab.paused
     );
+    console.log("Background Script: Sending updated states to Tauri:", audioTabs);
 
     // sends to tauri app via websocket server
     if(socket?.readyState === WebSocket.OPEN) { // if we have a connection to the websocket
@@ -290,7 +291,7 @@ export default defineBackground(() => {
   const updateStatus = (newStatus: String) => {
     status = newStatus;
     // Notify the Vue UI whenever the status changes
-    browser.runtime.sendMessage({type: 'SERVER_STATUS', status})
+    browser.runtime.sendMessage({type: 'SERVER_STATUS', status}); // we use browser.runtime cause we want to send to popup only 
   };
 
   let reconnectAttempts = 0; // keeps track of how many times we invoke connect() 
@@ -355,17 +356,24 @@ export default defineBackground(() => {
       if (data.setVolume) {
         tauriTabId = data.setVolume.tabId;
         tauriVolume = data.setVolume.volume;
-        browser.runtime.sendMessage({ // send to popup
+        browser.tabs.sendMessage(tauriTabId, { // send to content script
           type: 'TAURI_VOLUME_CHANGED', 
-          data: {tauriTabId, tauriVolume}
-        }).catch(() => {}); // Quietly ignore if popup is closed
+          volume: tauriVolume
+        }).catch(err => {
+            console.error(`Failed to send volume command to content script for tab ${tauriTabId}:`, err);
+          }); 
+        
       }else if (data.setMute) {
+        console.log(data);
         tauriTabId = data.setMute.tabId;
-        taurisMuted = data.setMute.mute;
-        browser.runtime.sendMessage({
+        tauriIsMuted = data.setMute.isMuted;
+        browser.tabs.sendMessage(tauriTabId, {
           type: 'TAURI_MUTE_CHANGED',
-          data: {tauriTabId, taurisMuted},
-        }).catch(() => {});
+          isMuted: tauriIsMuted,
+        }).catch(err => {
+          console.error(`Failed to send mute command to content script for tab ${tauriTabId}:`, err);
+        });
+        console.log("sent from tauri to popup");
       }
       
       
