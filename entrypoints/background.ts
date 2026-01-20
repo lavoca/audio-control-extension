@@ -207,8 +207,8 @@ export default defineBackground(() => {
     
     const baseState = existingState || { 
       tabId,
-      url: '',
-      title: '',
+      tabUrl: '',
+      tabTitle: '',
       isAudible: false,
       hasContentAudio: false,
       isMuted: false,
@@ -221,9 +221,9 @@ export default defineBackground(() => {
       ...baseState,
       hasContentAudio: true,
       paused: false,
-      tabUrl: message.url || baseState.tabUrl,
-      tabTitle: message.title || baseState.tabTitle,
-      isMuted: message.muted ?? baseState.isMuted,
+      tabUrl: message.tabUrl || baseState.tabUrl,
+      tabTitle: message.tabTitle || baseState.tabTitle,
+      isMuted: message.isMuted ?? baseState.isMuted,
       volume: message.volume ?? baseState.volume,
     });
     
@@ -241,7 +241,7 @@ export default defineBackground(() => {
         hasContentAudio: false,
         paused: false,
         // Keep muted/volume state from message
-        isMuted: message.muted ?? existingState.isMuted,
+        isMuted: message.isMuted ?? existingState.isMuted,
         volume: message.volume ?? existingState.volume,
       });
       
@@ -260,7 +260,7 @@ export default defineBackground(() => {
         hasContentAudio: true,
         paused: true,
         // Update muted/volume from the pause event
-        isMuted: message.muted ?? existingState.isMuted,
+        isMuted: message.isMuted ?? existingState.isMuted,
         volume: message.volume ?? existingState.volume, 
       });
       
@@ -276,7 +276,7 @@ export default defineBackground(() => {
     
     if (existingState) {
       await updateTabstate(tabId, {
-        isMuted: message.muted ?? existingState.isMuted,
+        isMuted: message.isMuted ?? existingState.isMuted,
         volume: message.volume ?? existingState.volume,
       });
       

@@ -24,6 +24,8 @@ export default defineContentScript({
       muted: false,
     };
 
+    let hasSentInitialState = false; // Flag to ensure we always send the first valid state
+
       // Function to notify if a tab is playing audio or not
     function updateAudioStatus(state: string, data: {muted?: boolean, volume?: number} = {}) {
       // newState will represent new data about audio elements  
@@ -34,18 +36,20 @@ export default defineContentScript({
       }
 
       if (
-        newState.type !== lastState.type || newState.volume !== lastState.volume || newState.muted !== lastState.muted
+        !hasSentInitialState || newState.type !== lastState.type || newState.volume !== lastState.volume || newState.muted !== lastState.muted
       ) {
 
         lastState = newState; // update the old data with the new one that w're about to send 
+        hasSentInitialState = true;
 
         // CONTENT SCRIPT: Send audio state TO background
         // Browser automatically attaches this tab's ID for background to know who sent it  
         browser.runtime.sendMessage({
-          type: state, 
-          ...data, // "...data" means we extract the values inside data without needing to do things like data.volume: / data.muted:
-          url: window.location.href,
-          title: document.title,
+          type: newState.type, 
+          volume: newState.volume,
+          isMuted: newState.muted,
+          tabUrl: window.location.href,
+          tabTitle: document.title,
           timestamp: Date.now()
         })
       }

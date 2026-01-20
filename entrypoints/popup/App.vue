@@ -16,8 +16,8 @@ import { ref, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 type AudioTab = {
   id: number 
   tabId: number
-  title: string
-  url: string
+  tabTitle: string
+  tabUrl: string
   isAudible: boolean
   hasContentAudio: boolean
   isMuted: boolean
@@ -55,6 +55,7 @@ browser.runtime.onMessage.addListener((message) => {
 
  // captures the value when the slider first gets pressed this value will serve as a returning point when we unmute from volume = 0
 function captureStartVolume(tabID:number, initialVolume: number) {
+  console.log("initialvolume:", initialVolume);
   startVolumes.set(tabID, initialVolume); // push the volume and the tabID associated with it as the key
 
 }
@@ -98,7 +99,7 @@ onBeforeUnmount(() => { // before the extension is about to close
     <h2>connection to tauri server: {{ serverStatus }}</h2>
     <ul v-if="audioTabs.length > 0">
       <li v-for="tab in audioTabs" :key="tab.id" class="tab">
-        <span class="title">{{ tab.title || tab.url }}</span>
+        <span class="title">{{ tab.tabTitle || tab.tabUrl }}</span>
         
         <!-- Volume Controls -->
         
