@@ -85,6 +85,10 @@ export default defineContentScript({
         audioElements.forEach(element => {
 
           element.muted = message.isMuted; // change the mute state
+
+          if(message.isMuted === false && element.volume === 0) { 
+            element.volume = message.initialVolume; // initial volume we want to go back to after we unmute from volume being 0
+          }
         })
       }
     })// this volume and mute change will then be detected by addEventListener('volumechange') and fires updateAudioStatus and everything proceeds as normal from there

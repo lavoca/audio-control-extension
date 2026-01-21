@@ -11,11 +11,10 @@
 
 
 
-import { ref, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 type AudioTab = {
-  id: number 
-  tabId: number
+  tabId: number 
   tabTitle: string
   tabUrl: string
   isAudible: boolean
@@ -28,14 +27,14 @@ type AudioTab = {
 let serverStatus :String = 'DISCONNECTED'; 
 const audioTabs = ref<AudioTab[]>([])
 let port: Browser.runtime.Port | null = null
-const startVolumes = new Map<number, number>() // map to hold all the starting slider volumes for every tab
+const startVolumes = new Map<number, number>(); // map to hold all the starting slider volumes for every tabId
 
 // handle messages we get from background
 function handleMessage(msg: any) {
   if (msg.type === 'AUDIO_TABS_UPDATE') {
     audioTabs.value = msg.tabs.map((tab: any) => ({
       ...tab,
-      id: tab.tabId, // Map tabId to id for Vue key
+      tabId: tab.tabId, // Map tabId to id for Vue key
       paused: tab.paused ?? false,
       volume: tab.volume ?? 0,
       isMuted: tab.isMuted ?? false,
@@ -98,7 +97,7 @@ onBeforeUnmount(() => { // before the extension is about to close
     <h1>Active Audio Tabs version 2</h1>
     <h2>connection to tauri server: {{ serverStatus }}</h2>
     <ul v-if="audioTabs.length > 0">
-      <li v-for="tab in audioTabs" :key="tab.id" class="tab">
+      <li v-for="tab in audioTabs" :key="tab.tabId" class="tab">
         <span class="title">{{ tab.tabTitle || tab.tabUrl }}</span>
         
         <!-- Volume Controls -->
@@ -110,12 +109,12 @@ onBeforeUnmount(() => { // before the extension is about to close
           max="1"
           step="0.01"
           :value="tab.volume"
-          @mousedown="captureStartVolume(tab.id, tab.volume)" 
-          @input="changeVolume(tab.id, ($event.target as HTMLInputElement).valueAsNumber)"
+          @mousedown="captureStartVolume(tab.tabId, tab.volume)" 
+          @input="changeVolume(tab.tabId, ($event.target as HTMLInputElement).valueAsNumber)"
           class="w-40 h-2 bg-gray-500 rounded-lg appearance-none cursor-pointer"
         />
         <button
-          @click="setMute(tab.id, !tab.isMuted)"
+          @click="setMute(tab.tabId, !tab.isMuted)"
           class="px-4 py-1 text-sm font-semibold text-white rounded-md transition-colors duration-200"
           :class="tab.isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
         >

@@ -37,6 +37,7 @@ let status: String = 'DISCONNECTED';
 let tauriTabId: number;
 let tauriVolume: number;
 let tauriIsMuted: boolean;
+let tauriInitialVolume: number;
 
 export default defineBackground(() => {
   
@@ -367,9 +368,11 @@ export default defineBackground(() => {
         console.log(data);
         tauriTabId = data.setMute.tabId;
         tauriIsMuted = data.setMute.isMuted;
+        tauriInitialVolume = data.setMute.initialVolume;
         browser.tabs.sendMessage(tauriTabId, {
           type: 'TAURI_MUTE_CHANGED',
           isMuted: tauriIsMuted,
+          initialVolume: tauriInitialVolume,
         }).catch(err => {
           console.error(`Failed to send mute command to content script for tab ${tauriTabId}:`, err);
         });
