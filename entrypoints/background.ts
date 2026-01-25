@@ -183,7 +183,6 @@ export default defineBackground(() => {
   
 
   // this sends existing audio tabs to popup when first connected. it gets called in 'onMounted' in app.vue
-  // it also sends those same audio tabs to tauri via websocket server. when the extension is mounted we do two things: send to popup and send to tauri the same tabs data
   browser.runtime.onConnect.addListener((port) => {
     if (port.name === 'popup') {
       popupPorts.push(port);
@@ -196,7 +195,6 @@ export default defineBackground(() => {
         if (message.type === 'GET_AUDIO_TABS') { // this is sent from app.vue when the popup is first mounted
           sendTabsToPopup(); // send to popup app.vue
           console.log("senTabsToPopup() called from onMessage.addListener");
-          connect(); // connect to the server. inside this function we handle the sending of tabs to tauri
         }
       });
     }
@@ -383,6 +381,8 @@ export default defineBackground(() => {
     }
   
   }
+  // call this function on extension load with browser
+  connect(); // connect to the server. inside this function we handle the sending of tabs to tauri
 });
 
 
